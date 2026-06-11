@@ -14,6 +14,35 @@ const FALLBACK: LlmDecision = {
 
 const SPAWN_TIMEOUT_MS = 90_000;
 
+const DEFAULT_MIN_ASK_MS = 60_000;
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const getMinAskMs = (): number => {
+  const raw = process.env.AGENT_CYA_MIN_ASK_MS;
+  if (raw === undefined) return DEFAULT_MIN_ASK_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_MIN_ASK_MS;
+};
+
+export const padAskDecision = async (
+  decision: Readonly<LlmDecision>,
+  elapsedMs: number,
+  sleepFn: (ms: number) => Promise<void> = sleep,
+): Promise<LlmDecision> => {
+  const minMs = getMinAskMs();
+  if (decision.decision !== "ask" || minMs <= 0) return decision;
+  const remaining = minMs - elapsedMs;
+  if (remaining <= 0) return decision;
+
+  await sleepFn(remaining);
+  return {
+    decision: "ask",
+    reason: `${decision.reason} [agent-cya held ${Math.ceil(minMs / 1000)}s for human input]`,
+  };
+};
+
 const INVOCATION_FOR_PLATFORM: Record<
   "claude" | "opencode",
   Readonly<{ binary: string; leadingArgs: readonly string[] }>
@@ -129,20 +158,11 @@ const spawnBinary = (
 };
 /* eslint-enable functional/immutable-data */
 
-export const review = async function review(
-  input: Readonly<ReviewInput>,
-  platform: "opencode" | "claude",
-  spawnFn: typeof spawn = spawn,
-): Promise<LlmDecision> {
-  const invocation = INVOCATION_FOR_PLATFORM[platform];
-  if (!invocation) {
-    return { decision: "ask", reason: `Unknown platform: ${platform}` };
-  }
-
-  const systemPrompt = buildSystemPrompt();
-  const userPrompt = buildUserPrompt(input);
-  const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-
+const callLlm = async (
+  invocation: Readonly<{ binary: string; leadingArgs: readonly string[] }>,
+  fullPrompt: string,
+  spawnFn: typeof spawn,
+): Promise<LlmDecision> => {
   try {
     const raw = await spawnBinary(
       invocation.binary,
@@ -157,4 +177,26 @@ export const review = async function review(
     );
     return FALLBACK;
   }
+};
+
+export const review = async function review(
+  input: Readonly<ReviewInput>,
+  platform: "opencode" | "claude",
+  spawnFn: typeof spawn = spawn,
+): Promise<LlmDecision> {
+  const invocation = INVOCATION_FOR_PLATFORM[platform];
+  if (!invocation) {
+    return padAskDecision(
+      { decision: "ask", reason: `Unknown platform: ${platform}` },
+      0,
+    );
+  }
+
+  const systemPrompt = buildSystemPrompt();
+  const userPrompt = buildUserPrompt(input);
+  const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+
+  const startMs = Date.now();
+  const decision = await callLlm(invocation, fullPrompt, spawnFn);
+  return padAskDecision(decision, Date.now() - startMs);
 };

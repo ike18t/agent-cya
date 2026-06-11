@@ -60,14 +60,14 @@ Replace `/absolute/path/to/agent-cya` with where you cloned this repo. The hook 
 
 The hook only fires when Claude Code would otherwise prompt for permission — already-allowlisted commands skip it. agent-cya's `allow` / `deny` / `ask` decisions map directly to `PermissionRequest` behaviors; `ask` falls through to Claude Code's standard permission dialog.
 
-> ⚠️ **Watch out for "autopilot accept" on fallback prompts.** When the reviewer LLM is unreachable or times out, agent-cya falls back to `ask`. Claude Code then surfaces its **standard approval prompt** — visually identical to any routine permission ask, with no agent-cya reasoning attached. It's easy to muscle-memory click "Yes" and approve a command the LLM would have caught if it had been responsive. Two specific failure modes:
+> ⚠️ **Watch out for "autopilot accept" on fallback prompts.** When the reviewer LLM is unreachable or returns `ask`, Claude Code surfaces its **standard approval prompt** — visually identical to any routine permission ask, with no agent-cya reasoning attached. With a fast reviewer the prompt can flash for just a few seconds before the hook lands a final decision, making it easy to dismiss reflexively. Two specific failure modes:
 >
 > 1. **Clicking "Yes"** runs the command once. Annoying but recoverable — the audit log captures what got through.
 > 2. **Clicking "Yes, and don't ask again for X"** adds the command pattern to your allowlist, which **bypasses the hook entirely** for future matches. Worse than #1 and silent.
 >
-> If you see an unexpected approval prompt while agent-cya is installed, treat it as a signal that the reviewer isn't reaching the LLM — check `~/.local/state/agent-cya/claude-hook.log` for the cause before accepting.
+> To give yourself a real interaction window, agent-cya **pads `ask` decisions to a configurable minimum wall-clock duration** (default **60 seconds** via `AGENT_CYA_MIN_ASK_MS`). Allows and denies still return as fast as the LLM does; only the genuinely ambiguous calls hold the prompt open long enough to actually look at. Set `AGENT_CYA_MIN_ASK_MS=0` to disable padding, or any other value (e.g. `30000` for 30s) to tune the window. Make sure the hook `timeout` (seconds) is greater than `AGENT_CYA_MIN_ASK_MS / 1000` plus your LLM's worst-case review time.
 >
-> The `timeout` value above is in **seconds** (the Claude Code default is already 600s, so most users won't need to tune it). Lower it to fail fast when the reviewer is unresponsive; raise it only for unusually slow local models.
+> If you see an unexpected approval prompt while agent-cya is installed, treat it as a signal that the reviewer isn't reaching the LLM — check `~/.local/state/agent-cya/claude-hook.log` for the cause before accepting.
 
 ### As an OpenCode Plugin
 

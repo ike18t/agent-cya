@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { parseLlmResponse, review } from "./llm.ts";
+process.env.AGENT_CYA_MIN_ASK_MS = "0";
+import { padAskDecision, parseLlmResponse, review } from "./llm.ts";
 
 describe("parseLlmResponse", () => {
   it("parses valid allow decision", () => {
@@ -164,6 +165,69 @@ describe("review", () => {
 
     expect(result.decision).toBe("ask");
     expect(result.reason).toBe("LLM unavailable, needs human review");
+  });
+
+  describe("padAskDecision", () => {
+    beforeEach(() => {
+      process.env.AGENT_CYA_MIN_ASK_MS = "60000";
+    });
+
+    it("sleeps the remaining ms when ask arrives early", async () => {
+      const fakeSleep = vi.fn().mockResolvedValue(undefined);
+      const result = await padAskDecision(
+        { decision: "ask", reason: "unsure" },
+        5_000,
+        fakeSleep,
+      );
+      expect(fakeSleep).toHaveBeenCalledWith(55_000);
+      expect(result.decision).toBe("ask");
+      expect(result.reason).toContain("60s for human input");
+    });
+
+    it("does not sleep when already past the minimum", async () => {
+      const fakeSleep = vi.fn().mockResolvedValue(undefined);
+      const result = await padAskDecision(
+        { decision: "ask", reason: "unsure" },
+        61_000,
+        fakeSleep,
+      );
+      expect(fakeSleep).not.toHaveBeenCalled();
+      expect(result.reason).toBe("unsure");
+    });
+
+    it("does not pad allow decisions", async () => {
+      const fakeSleep = vi.fn().mockResolvedValue(undefined);
+      const result = await padAskDecision(
+        { decision: "allow", reason: "safe" },
+        0,
+        fakeSleep,
+      );
+      expect(fakeSleep).not.toHaveBeenCalled();
+      expect(result).toEqual({ decision: "allow", reason: "safe" });
+    });
+
+    it("does not pad deny decisions", async () => {
+      const fakeSleep = vi.fn().mockResolvedValue(undefined);
+      const result = await padAskDecision(
+        { decision: "deny", reason: "destructive" },
+        0,
+        fakeSleep,
+      );
+      expect(fakeSleep).not.toHaveBeenCalled();
+      expect(result).toEqual({ decision: "deny", reason: "destructive" });
+    });
+
+    it("is disabled when AGENT_CYA_MIN_ASK_MS is 0", async () => {
+      process.env.AGENT_CYA_MIN_ASK_MS = "0";
+      const fakeSleep = vi.fn().mockResolvedValue(undefined);
+      const result = await padAskDecision(
+        { decision: "ask", reason: "unsure" },
+        0,
+        fakeSleep,
+      );
+      expect(fakeSleep).not.toHaveBeenCalled();
+      expect(result.reason).toBe("unsure");
+    });
   });
 
   it("returns ask fallback on malformed binary output", async () => {

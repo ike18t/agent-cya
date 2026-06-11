@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+process.env.AGENT_CYA_MIN_ASK_MS = "0";
 import { parseInput } from "./cli.ts";
 
 vi.mock("node:child_process", () => ({
