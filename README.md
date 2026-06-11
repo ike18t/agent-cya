@@ -1,21 +1,21 @@
-# agent-cya
+# AgentCYA
 
 A second-LLM permission reviewer for AI coding assistants (Claude Code, OpenCode).
 
 ## Why
 
-You're usually choosing between two bad options: `--dangerously-skip-permissions` lets the agent rip but auto-approves anything it dreams up, while the default permission flow buries you in a prompt for every other command. agent-cya is the middle path — a separate LLM reviews each tool call (and reads the contents of scripts it's about to execute) and decides `allow` / `deny` / `ask` on the merits, so the agent keeps moving on routine work and only pulls you in when the risk actually warrants it.
+You're usually choosing between two bad options: `--dangerously-skip-permissions` lets the agent rip but auto-approves anything it dreams up, while the default permission flow buries you in a prompt for every other command. AgentCYA is the middle path — a separate LLM reviews each tool call (and reads the contents of scripts it's about to execute) and decides `allow` / `deny` / `ask` on the merits, so the agent keeps moving on routine work and only pulls you in when the risk actually warrants it.
 
 ## How It Works
 
-agent-cya sits between the coding assistant and execution. The decision pipeline is:
+AgentCYA sits between the coding assistant and execution. The decision pipeline is:
 
 ```
 stdin JSON → Hard deny? → File enrichment (Bash) → LLM review → stdout JSON + audit log
 ```
 
 1. **Hard deny** — Hardcoded regex patterns catch obviously destructive commands (`rm -rf /`, `curl | bash`, `sudo`, etc.). Blocked immediately, no LLM call.
-2. **File enrichment** — When a Bash command runs a script (`bash foo.sh`, `node x.js`, `./run`, `python3 script.py`), agent-cya reads the script from disk and includes its contents in the LLM prompt. The reviewer sees what's actually about to execute, not just the invocation — which closes the create-then-execute loophole where a write step slips past unreviewed.
+2. **File enrichment** — When a Bash command runs a script (`bash foo.sh`, `node x.js`, `./run`, `python3 script.py`), AgentCYA reads the script from disk and includes its contents in the LLM prompt. The reviewer sees what's actually about to execute, not just the invocation — which closes the create-then-execute loophole where a write step slips past unreviewed.
 3. **LLM review** — Everything else is sent to the `claude` or `opencode` CLI binary (spawned locally, no HTTP) for a security assessment.
 4. **Audit log** — Every decision is appended to `~/.agent-cya/audit.log`.
 
@@ -58,20 +58,20 @@ Add a `PermissionRequest` hook to `~/.claude/settings.json` that points at `hook
 
 Replace `/absolute/path/to/agent-cya` with where you cloned this repo. The hook reviews via the `claude` CLI by default; prepend `AGENT_CYA_PLATFORM=opencode` to the command to use OpenCode instead. To gate file edits too, widen the matcher to `"Bash|Write|Edit"`.
 
-The hook only fires when Claude Code would otherwise prompt for permission — already-allowlisted commands skip it. agent-cya's `allow` / `deny` / `ask` decisions map directly to `PermissionRequest` behaviors; `ask` falls through to Claude Code's standard permission dialog.
+The hook only fires when Claude Code would otherwise prompt for permission — already-allowlisted commands skip it. AgentCYA's `allow` / `deny` / `ask` decisions map directly to `PermissionRequest` behaviors; `ask` falls through to Claude Code's standard permission dialog.
 
-> ⚠️ **Watch out for "autopilot accept" on fallback prompts.** When the reviewer LLM is unreachable or returns `ask`, Claude Code surfaces its **standard approval prompt** — visually identical to any routine permission ask, with no agent-cya reasoning attached. With a fast reviewer the prompt can flash for just a few seconds before the hook lands a final decision, making it easy to dismiss reflexively. Two specific failure modes:
+> ⚠️ **Watch out for "autopilot accept" on fallback prompts.** When the reviewer LLM is unreachable or returns `ask`, Claude Code surfaces its **standard approval prompt** — visually identical to any routine permission ask, with no AgentCYA reasoning attached. With a fast reviewer the prompt can flash for just a few seconds before the hook lands a final decision, making it easy to dismiss reflexively. Two specific failure modes:
 >
 > 1. **Clicking "Yes"** runs the command once. Annoying but recoverable — the audit log captures what got through.
 > 2. **Clicking "Yes, and don't ask again for X"** adds the command pattern to your allowlist, which **bypasses the hook entirely** for future matches. Worse than #1 and silent.
 >
-> To give yourself a real interaction window, agent-cya **pads `ask` decisions to a configurable minimum wall-clock duration** (default **60 seconds** via `AGENT_CYA_MIN_ASK_MS`). Allows and denies still return as fast as the LLM does; only the genuinely ambiguous calls hold the prompt open long enough to actually look at. Set `AGENT_CYA_MIN_ASK_MS=0` to disable padding, or any other value (e.g. `30000` for 30s) to tune the window. Make sure the hook `timeout` (seconds) is greater than `AGENT_CYA_MIN_ASK_MS / 1000` plus your LLM's worst-case review time.
+> To give yourself a real interaction window, AgentCYA **pads `ask` decisions to a configurable minimum wall-clock duration** (default **60 seconds** via `AGENT_CYA_MIN_ASK_MS`). Allows and denies still return as fast as the LLM does; only the genuinely ambiguous calls hold the prompt open long enough to actually look at. Set `AGENT_CYA_MIN_ASK_MS=0` to disable padding, or any other value (e.g. `30000` for 30s) to tune the window. Make sure the hook `timeout` (seconds) is greater than `AGENT_CYA_MIN_ASK_MS / 1000` plus your LLM's worst-case review time.
 >
-> If you see an unexpected approval prompt while agent-cya is installed, treat it as a signal that the reviewer isn't reaching the LLM — check `~/.local/state/agent-cya/claude-hook.log` for the cause before accepting.
+> If you see an unexpected approval prompt while AgentCYA is installed, treat it as a signal that the reviewer isn't reaching the LLM — check `~/.local/state/agent-cya/claude-hook.log` for the cause before accepting.
 
 ### As an OpenCode Plugin
 
-Use `hooks/opencode-plugin.ts` as an OpenCode `tool.execute.before` plugin. It spawns agent-cya as a subprocess with a 30s timeout and throws on deny/ask decisions.
+Use `hooks/opencode-plugin.ts` as an OpenCode `tool.execute.before` plugin. It spawns the `agent-cya` binary as a subprocess with a 30s timeout and throws on deny/ask decisions.
 
 Configure the LLM backend via `AGENT_CYA_PLATFORM` (defaults to `opencode`):
 
