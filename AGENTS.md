@@ -1,6 +1,6 @@
 # AGENTS.md
 
-TypeScript CLI that reviews AI coding assistant tool calls before execution. Uses `node --experimental-strip-types` (no compilation step).
+TypeScript CLI that reviews AI coding assistant tool calls before execution. No compilation step — runs directly with `node`.
 
 ## Quick Start
 
@@ -8,10 +8,10 @@ TypeScript CLI that reviews AI coding assistant tool calls before execution. Use
 npm install
 npm test                           # run all tests (vitest)
 npm run lint                       # tsc + eslint + prettier + knip
-node --experimental-strip-types src/main.ts review --help   # run CLI
+node src/main.ts review --help   # run CLI
 ```
 
-Node 23.9+ required for `--experimental-strip-types`.
+Node 23.9+ required for native `.ts` execution.
 
 ## Commands
 
@@ -20,12 +20,12 @@ Node 23.9+ required for `--experimental-strip-types`.
 | `npm test`                                                                                                          | Run all tests                  |
 | `npm run lint`                                                                                                      | tsc + eslint + prettier + knip |
 | `npm test -- src/cli.test.ts`                                                                                       | Run single test file           |
-| `echo '{"toolType":"Bash","command":"ls"}' \| node --experimental-strip-types src/main.ts review --platform claude` | Manual review                  |
+| `echo '{"toolType":"Bash","command":"ls"}' \| node src/main.ts review --platform claude` | Manual review                  |
 
 ## Critical Gotchas
 
-- **No compilation step**: Source runs directly with `--experimental-strip-types`. No `dist/` or `build/`. The bin script (`bin/agent-cya`) shells out to `node --experimental-strip-types src/main.ts`.
-- **`.ts` imports in `.ts` files**: All internal imports use `.ts` extensions (native Node ESM with `--experimental-strip-types`). Adding new modules requires `.ts` in the import path.
+- **No compilation step**: Source runs directly with `node`. No `dist/` or `build/`. The bin script (`bin/agent-cya`) shells out to `node src/main.ts`.
+- **`.ts` imports in `.ts` files**: All internal imports use `.ts` extensions (native Node ESM). Adding new modules requires `.ts` in the import path.
 - **Tests included in tsconfig**: `src/**/*.test.ts` files are included in `tsconfig.json`. Running `npm run lint` type-checks both source and test files. `vitest/globals` is in the `types` array so LSP resolves `describe`/`it`/`expect`, but tests must still import from `"vitest"` explicitly.
 - **`cli.test.ts` mocks `node:child_process`**: Must mock at top of file before importing `./cli.ts`, since `spawn` is used transitively.
 - **No HTTP, no API keys**: LLM review shells out to `claude` or `opencode` CLI binaries via `child_process.spawn(binary, ["-p", prompt])`. No `fetch`, no OpenAI API.

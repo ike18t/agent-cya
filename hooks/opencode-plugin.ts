@@ -80,7 +80,6 @@ const spawnAgentCya = (inputJson: string): Promise<AgentCyaDecision> => {
     const child: ChildProcess = spawn(
       "node",
       [
-        "--experimental-strip-types",
         resolvePath(__dirname, "..", "src", "main.ts"),
         "review",
         "--platform",

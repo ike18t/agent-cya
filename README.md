@@ -26,10 +26,10 @@ npm install
 
 # Manual review:
 echo '{"toolType":"Bash","command":"ls"}' | \
-  node --experimental-strip-types src/main.ts review --platform claude
+  node src/main.ts review --platform claude
 ```
 
-Node 23.9+ is required for `--experimental-strip-types`. No compilation step — source runs directly.
+Node 23.9+ is required for native `.ts` execution. No compilation step — source runs directly.
 
 ## Usage
 
@@ -144,11 +144,11 @@ Key design decisions:
 
 - **No config file** — deny patterns are hardcoded, not user-configurable
 - **No HTTP, no API keys** — LLM review shells out to the `claude` or `opencode` CLI binary via `child_process.spawn`
-- **No compilation** — runs directly with `node --experimental-strip-types`; all imports use `.ts` extensions
+- **No compilation** — runs directly with `node`; all imports use `.ts` extensions
 
 ## Tech Stack
 
-- TypeScript (no compilation — `node --experimental-strip-types`)
+- TypeScript (no compilation — `node`)
 - Commander.js — CLI framework
 - Vitest — Testing
 
