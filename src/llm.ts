@@ -154,6 +154,11 @@ const spawnBinary = (
       acc.settled = true;
       clearTimeout(timeout);
       cleanup();
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        process.stderr.write(
+          `[agent-cya] ENOENT looking up '${binary}' (PATH=${process.env.PATH ?? "<unset>"})\n`,
+        );
+      }
       reject(new Error(`Failed to spawn ${binary}: ${err.message}`));
     });
   });
