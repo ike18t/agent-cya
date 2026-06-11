@@ -109,6 +109,13 @@ const spawnBinary = (
     const acc = { stdout: "", stderr: "", settled: false };
 
     const cleanup = () => {
+      if (typeof child?.kill !== "function") {
+        process.stderr.write(
+          `[agent-cya] cleanup: ${binary} child has unexpected shape ` +
+            `(typeof child=${typeof child}, kill=${typeof child?.kill}, killed=${typeof child?.killed})\n`,
+        );
+        return;
+      }
       if (!child.killed) child.kill("SIGTERM");
     };
     const timeout = setTimeout(() => {
